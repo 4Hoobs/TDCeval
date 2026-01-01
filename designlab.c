@@ -18,6 +18,8 @@
 // ---------------------------------------------------------------------------------------------
 const uint8_t config_register[17] = {0x31, 0x81, 0x9F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
                                      0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; // modified
+// const uint8_t config_register[17] = {0x31, 0xA5, 0x9F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
+//                                      0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; // pulse width
 // const char config_register[17] = {0x31, 0x01, 0x1F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
 //                                   0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; //original
 // A typical config settings = { config00, config01, … , config16 }
@@ -156,7 +158,7 @@ int main(void)
 
         while (true)
         {
-            if (measure) //if measure flag is set
+            if (measure) // if measure flag is set
             {
                 while (gpio_get(PIN_INTERRUPT) != 0)
                     tight_loop_contents();
@@ -169,7 +171,7 @@ int main(void)
                 writeBuffer[0] = spiopc_read_results + reference_index_ch1_byte3; // Opcode for "Read Result" and data address are sent
                 spi_write_blocking(SPI_PORT, writeBuffer, 1);
 
-                memset(reference_index, 0, sizeof reference_index); //result arrays are zeroed
+                memset(reference_index, 0, sizeof reference_index); // result arrays are zeroed
                 memset(stopresult, 0, sizeof stopresult);
                 for (size_t i = 0; i < 4; i++)
                 {
@@ -195,20 +197,22 @@ int main(void)
                     // has been received
                 }
 
-                for (size_t i = 0; i < 4; i++) // print stop results
+                for (size_t i = 0; i < 1; i++) // print stop results
                 {
                     printf("stop%d: %d,", i + 1, stopresult[i]);
+                    // printf("%d,%d,", stopresult[0], stopresult[2]); //simpler readout
                 }
-                for (size_t i = 0; i < 4; i++) // then print reference indeces
+                for (size_t i = 0; i < 1; i++) // then print reference indeces
                 {
                     printf("ref%d: %d,", i + 1, reference_index[i]);
+                    // printf("%d,%d", reference_index[0], reference_index[2]); //simpler readout
                 }
                 printf("\n");
 
                 gpio_put(PIN_CS, 1);
             }
-            userinput = getchar_timeout_us(0); //non-blocking user read
-            if (userinput == 'p') // p pauses measurements
+            userinput = getchar_timeout_us(0); // non-blocking user read
+            if (userinput == 'p')              // p pauses measurements
             {
                 measure = false;
             }
