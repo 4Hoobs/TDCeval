@@ -1,6 +1,7 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include<stdio.h>
+#include<stdbool.h>
 
 //pin definitions-adjust to wiring
 #define PIN_SPI_SCK 18 //SPI clock (SCK)
@@ -24,7 +25,23 @@ static uint8_t gpx2_config[17]={
     0xCC, 0xCC, 0x31, 0x8E,
     0x04
 };
-
+//frequency config
+void gpx2_set_refclk_divisions(uint32_t divisions){
+    //divisions must fit in 20bits
+    divisions &=0XFFFFF;
+    //config[3]=lowest 8bits
+    gpx2_config[3]=(divisions & 0xFF);
+    //config[4]=middle 8bits
+    gpx2_config[4]=((divisions>>8)&0xFF);
+    //config[5]=upper 4bits
+    gpx2_config[5]&=0xF0; //clear lower 4 bits
+    gpx2_config[5]|=((divisions>>16)&0x0F);
+}
+//helper:calculate frequency
+uint32_t gpx2_compute_divisions_from_freq(uint32_t freq_hz){
+    //period in ps =1e12/freq
+    return(1000000000000ULL / freq_hz);
+}
 //helper:control chip select (SSN)
 
 static inline void gpx2_cs_low(void){
@@ -112,23 +129,24 @@ static void gpx2_read_results(uint32_t reference_index[4],
         stop_results[ch]=gpx2_read_24bit();
     }
     gpx2_cs_high();
+                              }
 
-    typedef enum{
-        GPX2_HIRES_OFF=0,
-        GPX2_HIRES_2X=1,
-        GPX2_HIRES_4X=2
-    } gpx2_hires_mode_t;
+typedef enum{
+    GPX2_HIRES_OFF=0,
+    GPX2_HIRES_2X=1,
+    GPX2_HIRES_4X=2
+} gpx2_hires_mode_t;
 
-    static void gpx2_set_hires(gpx2_hires_mode_t mode){
-        //mask for bits 6-7
-        const uint8_t HIRES_MASK=0xC0; //1100 0000
-        //clear bits 6-7 in config[6] and config [7]
-        gpx2_config[6] &= ~HIRES_MASK;
-        gpx2_config[7] &= ~HIRES_MASK;
-        //insert new mode(shifted into bits 6-7)
-        gpx2_config[6] |= ((mode & 0x03)<<6);
-        gpx2_config[7] |= ((mode & 0x03)<<6);
-    }
+static void gpx2_set_hires(gpx2_hires_mode_t mode){
+    //mask for bits 6-7
+    const uint8_t HIRES_MASK=0xC0; //1100 0000
+    //clear bits 6-7 in config[6] and config [7]
+    gpx2_config[6] &= ~HIRES_MASK;
+    gpx2_config[7] &= ~HIRES_MASK;
+    //insert new mode(shifted into bits 6-7)
+    gpx2_config[6] |= ((mode & 0x03)<<6);
+    gpx2_config[7] |= ((mode & 0x03)<<6);
+}
 
 
 //main
@@ -158,6 +176,10 @@ int main(){
     gpx2_cs_high();
     sleep_ms(5);
     
+    //set frequency
+    uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
+    gpx2_set_refclk_divisions(divisions);
+
     //modify config
     gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
 
