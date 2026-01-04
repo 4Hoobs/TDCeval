@@ -1,230 +1,226 @@
-#include <stdio.h>
-#include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
-#include "hardware/watchdog.h"
+#include<stdio.h>
+#include<stdbool.h>
 
-// ---------------------------------------------------------------------------------------------
-// *** Pico pins ***
-// ---------------------------------------------------------------------------------------------
+//pin definitions-adjust to wiring
 #define SPI_PORT spi0
-#define PIN_MISO 16
-#define PIN_CS 17 // called SSN by the TDC
-#define PIN_SCK 18
-#define PIN_MOSI 19
-#define PIN_INTERRUPT 20
-// ---------------------------------------------------------------------------------------------
-// *** Configuration Registers ***
-// ---------------------------------------------------------------------------------------------
-const uint8_t config_register[17] = {0x31, 0x81, 0x9F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
-                                     0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; // modified
-// const uint8_t config_register[17] = {0x31, 0xA5, 0x9F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
-//                                      0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; // pulse width
-// const char config_register[17] = {0x31, 0x01, 0x1F, 0x40, 0x0D, 0x03, 0xC0, 0x53,
-//                                   0xA1, 0x13, 0x00, 0x0A, 0xCC, 0xCC, 0x31, 0x8E, 0x04}; //original
-// A typical config settings = { config00, config01, … , config16 }
-// ---------------------------------------------------------------------------------------------
-// *** SPI Opcodes ***
-// ---------------------------------------------------------------------------------------------
-const uint8_t spiopc_power = 0x30;        // opcode for "Power on Reset"
-const uint8_t spiopc_init = 0x18;         // opcode for "Initialize Chip and Start Measurement"
-const uint8_t spiopc_write_config = 0x80; // opcode for "Write Configuration"
-const uint8_t spiopc_read_config = 0x40;  // opcode for "Read Configuration"
-const uint8_t spiopc_read_results = 0x60; // opcode for "Read Measurement Results"
-// ---------------------------------------------------------------------------------------------
-// *** SPI Addresses ***
-// ---------------------------------------------------------------------------------------------
-const uint8_t reference_index_ch1_byte3 = 8; //
-const uint8_t reference_index_ch1_byte2 = 9;
-const uint8_t reference_index_ch1_byte1 = 10;
-const uint8_t stopresult_ch1_byte3 = 11;
-const uint8_t stopresult_ch1_byte2 = 12;
-const uint8_t stopresult_ch1_byte1 = 13;
-// . . . .
-const uint8_t stopresult_ch4_byte3 = 29;
-const uint8_t stopresult_ch4_byte2 = 30;
-const uint8_t stopresult_ch4_byte1 = 31;
-// ---------------------------------------------------------------------------------------------
-// *** Other Variables ***
-// --------------------------------------------------------------------------------------------
-uint8_t Buffer[1];            // read buffer variable used to copy the SPI data
-uint8_t writeBuffer[1];       // write buffer used to output SPI data
-int reference_index[4] = {0}; // reference index data array {Ch1, Ch2, Ch3, Ch4}
-int stopresult[4] = {0};      // stop result data array {Ch1, Ch2, Ch3, Ch4}
-bool config_error = false;    // flag that indicates if the config registers
-bool measure = true;          // flag that indicates if measurements are to be read from the TDC
-// note - the flag prevents readout, the TDC will still measure until its FIFO is saturated; those initial few values will then be read out when measurement is restarted
+#define PIN_SPI_SCK 18 //SPI clock (SCK)
+#define PIN_SPI_MOSI 19 //SPI MOSI(controller->GPX2)
+#define PIN_SPI_MISO 16 //SPI MISO(GPX2->controller)
+#define PIN_SPI_CS 17 //chip select (SSN) 
+#define PIN_GPX_INT 20 //GPX2 interrupt output
 
-void restart()
-{
-    watchdog_reboot(0, 0, 0); // reboots the chip
+//spi opcodes for tdc-gpx2
+#define OPC_POWER_RESET 0x30 //power-on reset
+#define OPC_INIT 0x18  //initialize chip and start measurement
+#define OPC_WRITE_CONFIG 0x80 //write configuration
+#define OPC_READ_CONFIG 0x40 //read configuration
+#define OPC_READ_RESULTS 0x60 //read measurement results
+
+//configuration registers, 17 bytes, from datasheet
+static uint8_t gpx2_config[17]={
+    0x31, 0x01, 0x1F, 0x40,
+    0x0D, 0x03, 0xC0, 0x53,
+    0xA1, 0x13, 0x00, 0x0A, 
+    0xCC, 0xCC, 0x31, 0x8E,
+    0x04
+};
+//frequency config
+void gpx2_set_refclk_divisions(uint32_t divisions){
+    //divisions must fit in 20bits
+    divisions &=0XFFFFF;
+    //config[3]=lowest 8bits
+    gpx2_config[3]=(divisions & 0xFF);
+    //config[4]=middle 8bits
+    gpx2_config[4]=((divisions>>8)&0xFF);
+    //config[5]=upper 4bits
+    gpx2_config[5]&=0xF0; //clear lower 4 bits
+    gpx2_config[5]|=((divisions>>16)&0x0F);
+}
+//helper:calculate frequency
+uint32_t gpx2_compute_divisions_from_freq(uint32_t freq_hz){
+    //period in ps =1e12/freq
+    return(1000000000000ULL / freq_hz);
+}
+//helper:control chip select (SSN)
+
+static inline void gpx2_cs_low(void){
+    gpio_put(PIN_SPI_CS, 0); //drive CS low->select GPX2
+}
+static inline void gpx2_cs_high(void){
+    gpio_put(PIN_SPI_CS, 1); //drive CS high->deselect GPX2
 }
 
-int main(void)
-{
-    // -----------------------------------------------------------------------------------------
-    // *** Power on reset ***
-    // -----------------------------------------------------------------------------------------
-    stdio_init_all();
-    char userinput = getchar(); // wait on any character before starting the program
-    // communication through USB
 
-    // SPI initialisation. This example will use SPI at 1MHz.
-    spi_init(SPI_PORT, 1000 * 1000);
-    // spi_init(SPI_PORT, 61035);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_CS, GPIO_FUNC_SIO);
-    gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+//send one byte over spi(blocking)
+static void gpx2_spi_send_byte(uint8_t value){
+    spi_write_blocking (SPI_PORT, &value, 1);
+}
+//read one byte over spi (blocking)
+static uint8_t gpx2_spi_read_byte(void){
+    uint8_t rx=0;
+    spi_read_blocking(SPI_PORT, 0x00, &rx, 1) ;
+    return rx;
+}
+//write configuration registers to GPX2
 
-    // Initialize interrupt pin
-    gpio_set_function(PIN_INTERRUPT, GPIO_FUNC_SIO);
-    gpio_set_dir(PIN_INTERRUPT, GPIO_IN);
+static bool gpx2_write_config(const uint8_t *cfg){
+    gpx2_cs_low();
 
-    // Chip select is active-low, so we'll initialise it to a driven-high state
-    gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);
+    //opcode for write config+start address
+    gpx2_spi_send_byte(OPC_WRITE_CONFIG+0x00);
 
-    gpio_put(PIN_CS, 0);
-
-    writeBuffer[0] = spiopc_power;
-    spi_write_blocking(SPI_PORT, writeBuffer, 1); // Opcode for "Power On Reset" is sent over SPI
-
-    gpio_put(PIN_CS, 1);
-    busy_wait_us(100); // wait for the TDC to reset
-    gpio_put(PIN_CS, 0);
-
-    // -----------------------------------------------------------------------------------------
-    // *** Writing the configuration registers ***
-    // -----------------------------------------------------------------------------------------
-    writeBuffer[0] = spiopc_write_config + 00;
-    spi_write_blocking(SPI_PORT, writeBuffer, 1); // Opcode for "Write Configuration"
-                                                  // and config address (00) are sent over SPI
-    for (size_t i = 0; i < 17; i++)               // Send all 17 config registers via SPI
-    {
-        writeBuffer[0] = config_register[i];
-        // printf("Writing %x\n", writeBuffer[0]); //debug
-        spi_write_blocking(SPI_PORT, writeBuffer, 1);
+    //send all 17 config bytes
+    for (int i=0; i<17; i++){
+        gpx2_spi_send_byte(cfg[i]);
     }
-    // printf("%d", gpio_get(PIN_INTERRUPT)); //debug
-    gpio_put(PIN_CS, 1);
-    gpio_put(PIN_CS, 0);
+    gpx2_cs_high();
+    // sleep_us(5);
+    return true;
+}
+//read back and verify config. registers
+static bool gpx2_verify_config(const uint8_t *cfg){
+    gpx2_cs_low();
 
-    // -----------------------------------------------------------------------------------------
-    // *** Verification of config registers ***
-    // -----------------------------------------------------------------------------------------
-    writeBuffer[0] = spiopc_read_config + 00;
-    spi_write_blocking(SPI_PORT, writeBuffer, 1); // Opcode for "Read Configuration"
-                                                  // and config address (00) are sent over SPI
-    for (size_t i = 0; i < 17; i++)
-    {
-        spi_read_blocking(SPI_PORT, 0, Buffer, 1); // read one byte from SPI to Buffer variable
-        // printf("reading: %x\n", Buffer[0]); //debug
-        if (config_register[i] != Buffer[0])
-            config_error = true;
-        // if there was a failure in writing the config
-        // registers, then the config_error flag is raised.
-    }
-    //
-    // -----------------------------------------------------------------------------------------
-    // *** Initialize and start the measurement ***
-    // -----------------------------------------------------------------------------------------
-    // printf("Error: %d\n", config_error); //debug
-
-    if (config_error == false)
-    {
-        // printf("Inside the correct config\n"); // debug
-
-        gpio_put(PIN_CS, 1);
-        gpio_put(PIN_CS, 0);
-
-        writeBuffer[0] = spiopc_init;
-        spi_write_blocking(SPI_PORT, writeBuffer, 1); // Opcode for "Initialize" is sent over SPI
-        gpio_put(PIN_CS, 1);
-        busy_wait_us(100); // wait for the TDC to initialize
-
-        // This is required to start measuring process
-        // *************************************************************************************
-        // End of the configuration settings. After now the time measurement will start.
-        // This code is designed to use SPI to read the measurement data from GPX2.
-        // Using LVDS as a output interface requires additional hardware and code.
-        // *************************************************************************************
-        // -----------------------------------------------------------------------------------------
-        // *** Readout of measurement data via SPI ***
-        // -----------------------------------------------------------------------------------------
-
-        // printf("%d", gpio_get(PIN_INTERRUPT)); //debug
-
-        while (true)
-        {
-            if (measure) // if measure flag is set
-            {
-                while (gpio_get(PIN_INTERRUPT) != 0)
-                    tight_loop_contents();
-                // wait till the Interrupt pin is low
-
-                // printf("Wow, an interrupt!\n"); //debug
-
-                gpio_put(PIN_CS, 0);
-
-                writeBuffer[0] = spiopc_read_results + reference_index_ch1_byte3; // Opcode for "Read Result" and data address are sent
-                spi_write_blocking(SPI_PORT, writeBuffer, 1);
-
-                memset(reference_index, 0, sizeof reference_index); // result arrays are zeroed
-                memset(stopresult, 0, sizeof stopresult);
-                for (size_t i = 0; i < 4; i++)
-                {
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1); // read one byte from SPI to Buffer
-                    reference_index[i] = reference_index[i]    // Data is shifted 16 Bits to the left
-                                         + (Buffer[0] << 16);  // and added to the reference_index
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1); // read one byte from SPI to Buffer
-                    reference_index[i] = reference_index[i]    // Data is shifted 8 Bits to the left
-                                         + (Buffer[0] << 8);   // and added to the reference_index
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1); // read one byte from SPI to Buffer
-                    reference_index[i] = reference_index[i]    // Data is directly added to reference_index
-                                         + Buffer[0];
-                    // The complete reference index (3 Bytes)
-                    // has been received.
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1); // Same process as reference_index
-                    stopresult[i] = stopresult[i]              // is repeated for stop results
-                                    + (Buffer[0] << 16);
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1);
-                    stopresult[i] = stopresult[i] + (Buffer[0] << 8);
-                    spi_read_blocking(SPI_PORT, 0, Buffer, 1);
-                    stopresult[i] = stopresult[i] + Buffer[0];
-                    // The complete stopresult (3 Bytes)
-                    // has been received
-                }
-
-                for (size_t i = 0; i < 1; i++) // print stop results
-                {
-                    printf("stop%d: %d,", i + 1, stopresult[i]);
-                    // printf("%d,%d,", stopresult[0], stopresult[2]); //simpler readout
-                }
-                for (size_t i = 0; i < 1; i++) // then print reference indeces
-                {
-                    printf("ref%d: %d,", i + 1, reference_index[i]);
-                    // printf("%d,%d", reference_index[0], reference_index[2]); //simpler readout
-                }
-                printf("\n");
-
-                gpio_put(PIN_CS, 1);
-            }
-            userinput = getchar_timeout_us(0); // non-blocking user read
-            if (userinput == 'p')              // p pauses measurements
-            {
-                measure = false;
-            }
-            else if (userinput == 'r') // r restarts measurements
-            {
-                measure = true;
-            }
-            else if (userinput == 'q') // q resets the pico
-            {
-                restart();
-            }
+    //opcode for read config. +start address (0x00)
+    gpx2_spi_send_byte(OPC_READ_CONFIG+0x00);
+    //read 17 bytes and compare to local config.
+    uint8_t rx;
+    for (int i=0; i<17; i++){
+        rx=gpx2_spi_read_byte();
+        if (rx !=cfg[i]){
+            gpx2_cs_high();
+            return false;
         }
     }
-    printf("Outside the correct config\n"); // config failure
+    gpx2_cs_high();
+    return true;
 }
+//send initialize and start measurement
+static void gpx2_start_measurement(void){
+    gpx2_cs_low();
+    gpx2_spi_send_byte(OPC_INIT);
+    gpx2_cs_high();
+    busy_wait_us(100);
+}
+//read 24bit value from SPI, GPX2 send values as 3-byte big-endian
+
+static uint32_t gpx2_read_24bit(void){
+    uint32_t value=0;
+
+    value|=((uint32_t)gpx2_spi_read_byte())<<16;
+    value|=((uint32_t)gpx2_spi_read_byte())<<8;
+    value|=((uint32_t)gpx2_spi_read_byte());
+
+    return value;
+}
+//read measurement results for 4 channels
+static void gpx2_read_results(uint32_t reference_index[4],
+                              uint32_t stop_results[4]){
+    //wait until gpx2 puls interrupt pin low
+    while (gpio_get(PIN_GPX_INT) !=0){
+        tight_loop_contents(); //small idle loop
+    }
+    gpx2_cs_low();
+    gpx2_spi_send_byte(OPC_READ_RESULTS+8);
+
+    for (int ch=0; ch<4; ch++){
+        //3 bytes reference index
+        reference_index[ch]=gpx2_read_24bit();
+        //3 bytes stop results
+        stop_results[ch]=gpx2_read_24bit();
+    }
+    gpx2_cs_high();
+                              }
+
+typedef enum{
+    GPX2_HIRES_OFF=0,
+    GPX2_HIRES_2X=1,
+    GPX2_HIRES_4X=2
+} gpx2_hires_mode_t;
+
+static void gpx2_set_hires(gpx2_hires_mode_t mode){
+    //mask for bits 6-7
+    const uint8_t HIRES_MASK=0xC0; //1100 0000
+    //clear bits 6-7
+    gpx2_config[1] &= ~HIRES_MASK;
+    //insert new mode(shifted into bits 6-7)
+    gpx2_config[1] |= (mode<<6);
+}
+
+
+//main
+int main(){
+    stdio_init_all(); //enable usb serial output
+    char userinput = getchar();
+    //initialize SPI hardware
+    spi_init(SPI_PORT, 4*1000*1000); //SPI_PORT at 1MHz
+    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
+    gpio_set_function(PIN_SPI_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SPI_MOSI, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SPI_MISO, GPIO_FUNC_SPI);
+
+    //initialie chip select pin
+    gpio_init(PIN_SPI_CS);
+    gpio_set_function(PIN_SPI_CS, GPIO_FUNC_SIO);
+    gpio_set_dir(PIN_SPI_CS, GPIO_OUT);
+    gpx2_cs_high();
+
+    //initialize interrupt pin
+    gpio_init(PIN_GPX_INT);
+    gpio_set_function(PIN_GPX_INT, GPIO_FUNC_SIO);
+    gpio_set_dir(PIN_GPX_INT, GPIO_IN);
+
+    // sleep_ms(10); //small delay after power up
+
+    //power-on reset command
+    gpx2_cs_low();
+    gpx2_spi_send_byte(OPC_POWER_RESET);
+    gpx2_cs_high();
+    busy_wait_us(100);
+    // sleep_ms(5);
+    
+    //set frequency
+    uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
+    gpx2_set_refclk_divisions(divisions);
+
+    //modify config
+    gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
+
+    //write config to GPX2
+    gpx2_write_config(gpx2_config);
+    // if (!){
+    //     printf("Failed to write config\n");
+    //     while(1){tight_loop_contents();}
+    // }
+    //verify config
+    if (!gpx2_verify_config(gpx2_config)){
+        printf("Config verification failes\n");
+        while (1){tight_loop_contents();}
+    }
+    printf("Config OK, starting measurement...\n");
+
+    //start measurement
+    gpx2_start_measurement();
+
+    uint32_t reference_index[4]={0};
+    uint32_t stop_results[4]={0};
+
+    while(true){
+        //read masurement results
+        gpx2_read_results(reference_index, stop_results);
+
+        //print results for all 4 channels
+        for(int ch=0; ch<4; ch++){
+            printf("CH%d: REF=%lu   STOP=%lu\n", 
+            ch + 1,
+            (unsigned long)reference_index[ch],
+            (unsigned long)stop_results[ch]);
+        }
+        //wait before next read
+        // sleep_ms(100);
+    }
+    return 0;
+}
+

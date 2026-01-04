@@ -8,7 +8,7 @@
 #define PIN_SPI_MOSI 19 //SPI MOSI(controller->GPX2)
 #define PIN_SPI_MISO 16 //SPI MISO(GPX2->controller)
 #define PIN_SPI_CS 17 //chip select (SSN) 
-#define PIN_GPZ_INT 15 //GPX2 interrupt output
+#define PIN_GPX_INT 15 //GPX2 interrupt output
 
 //spi opcodes for tdc-gpx2
 #define OPC_POWER_RESET 0x30 //power-on reset
@@ -116,7 +116,7 @@ static uint32_t gpx2_read_24bit(void){
 static void gpx2_read_results(uint32_t reference_index[4],
                               uint32_t stop_results[4]){
     //wait until gpx2 puls interrupt pin low
-    while (gpio_get(PIN_GPZ_INT) !=0){
+    while (gpio_get(PIN_GPX_INT) !=0){
         tight_loop_contents(); //small idle loop
     }
     gpx2_cs_low();
@@ -165,8 +165,8 @@ int main(){
     gpx2_cs_high();
 
     //initialize interrupt pin
-    gpio_init(PIN_GPZ_INT);
-    gpio_set_dir(PIN_GPZ_INT, GPIO_IN);
+    gpio_init(PIN_GPX_INT);
+    gpio_set_dir(PIN_GPX_INT, GPIO_IN);
 
     sleep_ms(10); //small delay after power up
 
