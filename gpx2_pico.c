@@ -1,6 +1,6 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
-#include<studio.h>
+#include<stdio.h>
 
 //pin definitions-adjust to wiring
 #define PIN_SPI_SCK 18 //SPI clock (SCK)
@@ -22,6 +22,7 @@ static uint8_t gpx2_config[17]={
     0x0D, 0x03, 0xC0, 0x53,
     0xA1, 0x13, 0x00, 0x0A, 
     0xCC, 0xCC, 0x31, 0x8E,
+    0x04
 };
 
 //helper:control chip select (SSN)
@@ -109,7 +110,7 @@ static void gpx2_read_results(uint32_t reference_index[4],
         //3 bytes reference index
         reference_index[ch]=gpx2_read_24bit();
         //3 bytes stop results
-        stop_result[ch]=gpx2_read_24bit();
+        stop_results[ch]=gpx2_read_24bit();
     }
     gpx2_cs_high();
 
@@ -127,7 +128,7 @@ static void gpx2_set_hires(bool enable){
 
 //main
 int main(){
-    studio_init_all(); //enable usb serial output
+    stdio_init_all(); //enable usb serial output
 
     //initialize SPI hardware
     spi_init(spi0, 4*1000*1000); //spi0 at 4mMHz
@@ -171,7 +172,7 @@ int main(){
     gpx2_start_measurement();
 
     uint32_t reference_index[4]={0};
-    uint32_t stop_result[4]={0};
+    uint32_t stop_results[4]={0};
 
     while(true){
         //read masurement results
