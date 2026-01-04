@@ -76,7 +76,6 @@ static bool gpx2_write_config(const uint8_t *cfg){
         gpx2_spi_send_byte(cfg[i]);
     }
     gpx2_cs_high();
-    // sleep_us(5);
     return true;
 }
 //read back and verify config. registers
@@ -172,14 +171,12 @@ int main(){
     gpio_set_function(PIN_GPX_INT, GPIO_FUNC_SIO);
     gpio_set_dir(PIN_GPX_INT, GPIO_IN);
 
-    // sleep_ms(10); //small delay after power up
 
     //power-on reset command
     gpx2_cs_low();
     gpx2_spi_send_byte(OPC_POWER_RESET);
     gpx2_cs_high();
     busy_wait_us(100);
-    // sleep_ms(5);
     
     //set frequency
     uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
@@ -190,10 +187,7 @@ int main(){
 
     //write config to GPX2
     gpx2_write_config(gpx2_config);
-    // if (!){
-    //     printf("Failed to write config\n");
-    //     while(1){tight_loop_contents();}
-    // }
+
     //verify config
     if (!gpx2_verify_config(gpx2_config)){
         printf("Config verification failes\n");
@@ -218,8 +212,6 @@ int main(){
             (unsigned long)reference_index[ch],
             (unsigned long)stop_results[ch]);
         }
-        //wait before next read
-        // sleep_ms(100);
     }
     return 0;
 }
