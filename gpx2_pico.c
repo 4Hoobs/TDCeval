@@ -34,7 +34,6 @@ static inline void gpx2_cs_high(void){
     gpio_put(PIN_SPI_CS, 1); //drive CS high->deselect GPX2
 }
 
-//spi byte helpers
 
 //send one byte over spi(blocking)
 static void gpx2_spi_send_byte(uint8_t value){
@@ -114,16 +113,22 @@ static void gpx2_read_results(uint32_t reference_index[4],
     }
     gpx2_cs_high();
 
-}
-//modify confihuration 
-static void gpx2_set_hires(bool enable){
-    //placeholder
-    if (enable){
-        gpx2_config[] |=;//set bit
-    }else{
-        gpx2_config &= ~; //clear bit
+    typedef enum{
+        GPX2_HIRES_OFF=0,
+        GPX2_HIRES_2X=1,
+        GPX2_HIRES_4X=2
+    } gpx2_hires_mode_t;
+
+    static void gpx2_set_hires(gpx2_hires_mode_t mode){
+        //mask for bits 6-7
+        const uint8_t HIRES_MASK=0xC0; //1100 0000
+        //clear bits 6-7 in config[6] and config [7]
+        gpx2_config[6] &= ~HIRES_MASK;
+        gpx2_config[7] &= ~HIRES_MASK;
+        //insert new mode(shifted into bits 6-7)
+        gpx2_config[6] |= ((mode & 0x03)<<6);
+        gpx2_config[7] |= ((mode & 0x03)<<6);
     }
-}
 
 
 //main
@@ -154,7 +159,7 @@ int main(){
     sleep_ms(5);
     
     //modify config
-    gpx2_set_hires(true);
+    gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
 
     //write config to GPX2
     if (!gpx2_write_config(gpx2_config)){
@@ -176,14 +181,14 @@ int main(){
 
     while(true){
         //read masurement results
-        gpx2_read_results(reference_index, stop_result);
+        gpx2_read_results(reference_index, stop_results);
 
         //print results for all 4 channels
         for(int ch=0; ch<4; ch++){
             printf("CH%d: REF=%lu   STOP=%lu\n", 
             ch + 1,
             (unsigned long)reference_index[ch],
-            (unsigned long)stop_result[ch]);
+            (unsigned long)stop_results[ch]);
         }
         //wait before next read
         sleep_ms(100);
