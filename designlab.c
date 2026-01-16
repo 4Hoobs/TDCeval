@@ -56,6 +56,7 @@ static void gpx2_set_input_pins(uint8_t pins[4])
 static void gpx2_set_refclk(uint8_t clk)
 {
     clk &= 0x1;
+    gpx2_config[0]&=~(1<<4);
     gpx2_config[0] |= (clk << 4);
 }
 static void gpx2_set_input_processing(uint8_t pins[4])
@@ -126,11 +127,13 @@ static void gpx2_set_hires(gpx2_hires_mode_t mode)
 static void gpx2_set_common_fifo(uint8_t mode)
 {
     mode &= 1;
+    gpx2_config[2] &=~(1<<6);//clear bit before setting
     gpx2_config[2] |= (mode << 6);
 }
 static void gpx2_set_blockwise_fifo(uint8_t mode)
 {
     mode &= 1;
+    gpx2_config[2]&=~(1<<7);//clear bit before setting
     gpx2_config[2] |= (mode << 7);
 }
 // frequency config
@@ -155,11 +158,13 @@ uint32_t gpx2_compute_divisions_from_freq(uint32_t freq_hz)
 static void gpx2_set_refclk_by_xosc(uint8_t mode)
 {
     mode &= 1;
+    gpx2_config[7] &=~(1<<7);
     gpx2_config[7] |= (mode << 7);
 }
 static void gpx2_set_cmos_input(uint8_t mode)
 {
     mode &= 1;
+    gpx2_config[16]&=~(1<<2); //clear bit before setting
     gpx2_config[16] |= (mode << 2);
 }
 static void gpx2_input_config()
@@ -185,8 +190,9 @@ static void gpx2_input_config()
     }
     gpx2_set_input_processing(pins);
     printf("channel combine\n");
-    scanf(" %c", &input);
-    gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(input));
+    char ch;
+    scanf(" %c", &ch);
+    gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
     printf("hires\n");
     scanf("%d", &input);
     gpx2_set_hires(gpx2_hires_mode_converter(input));
@@ -353,7 +359,131 @@ static void gpx2_read_results(uint32_t reference_index[4],
     }
     gpx2_cs_high();
 }
+bool gpx2_validate_config(void)
+{
+    bool ok=true;
+    
+    uint8_t pin_ena=gpx2_config[0]& 0x0F; //PIN_ENA1..4
+    uint8_t refclk_ena=(gpx2_config[0]>>4)&0x01;
+    uint8_t hit_ena=gpx2_config[1]&0x0F; //HIT_ENA1..4
+    uint8_t channel_combine=(gpx2_config[1]>>4)&0x03;
+    uint8_t hires=(gpx2_config[1]>>6)&0x03;
+    uint8_t common_fifo=(gpx2_config[2]>>6)&0x01;
+    uint8_t blockwise_fifo=(gpx2_config[2]>>7)&0x01;
 
+    uint32_t refclk_div=
+        gpx2_config[3]|
+        (gpx2_config[4]<<8)|
+        ((gpx2_config[5]&0x0F)<<16);
+    
+    uint8_t cmos_input=(gpx2_config[16]>>2)&0x01;
+
+    printf("\n CONFIG VALIDATION \n");
+
+    //1. PIN_ENA vs HIT_ENA mismatch
+    for (int i=0; i<4; i++){
+        if ((pin_ena & (1<<i))&&!(hit_ena&(1<<i))){
+            printf("ERROR: STOP%d enabled but HIT_ENA%d disabled\n", i + 1, i + 1);
+            ok=false;
+        }
+    }
+    //2. REFCLK enabled?
+    if (!refclk_ena){
+        printf("ERROR: REFCLK input not enabled\n");
+        ok=false;
+    }
+    //3. CHANNEL_COMBINE valid?
+    if (channel_combine>2){
+        printf("ERROR: invalid CHANNEL_COMBINE value (%u)\n", channel_combine);
+        ok=false;
+    }
+    //4. HIRES valid?
+    if (hires>2){
+        printf("ERROR: Invalid HIRES value (%u)\n", hires);
+        ok=false;
+    }
+    //5. FIFO consistency
+    if (common_fifo && !blockwise_fifo){
+        printf("ERROR: COMMON_FIFO enabled but BLOCKWISE_FIFO disabled\n");
+        ok=false;
+    }
+    //6. REFCLK_DIVISIONS check
+    if (refclk_div==0){
+        printf ("ERROR: REFCLK_DIVISIONS=0\n");
+        ok=false;
+    }
+    else if (refclk_div<10000){
+        printf("WARNING: REFCLK_DIVISIONS (%u) too low, quantization artifacts possible\n", refclk_div);
+    }
+    else if (refclk_div>1000000){
+        printf("WARNING: REFCLK_DIVISIONS (%u) unusually high\n", refclk_div);
+    }
+    //7. CMOS_INPUT validation
+    if (cmos_input){
+        if (pin_ena==0){
+            printf("ERROR: CMOS input enabled but no STOP pins active\n");
+            ok=false;
+        }
+        if (!refclk_ena){
+            printf("ERROR: CMOS input enabled but REFCLK disabled\n");
+            ok=false;
+        }
+    }
+    if (ok)
+        printf("CONFIG VALID\n");
+    else
+        printf("CONFIG INVALID-fix error before applying\n");
+    return ok;
+}
+void gpx2_cli_menu()
+{
+    while(true){
+        printf("\n---GPX2 CLI MENU---\n");
+        printf("1. Set HIRES (0, 2, 4)\n");
+        printf("2. SET REFCLK frequency (Hz)\n");
+        printf("3. Show config bytes\n");
+        printf("4. Validate config\n");
+        printf("5. Apply config and start measurement\n");
+        printf("Q. Quit\n");
+
+        char choice=getchar();
+        while (choice == '\n'|| choice =='r')
+            choice=getchar();
+        int input=0;
+
+        switch(choice){
+            case '1':
+                printf("Enter HIRES mode: ");
+                scanf("%d", &input);
+                gpx2_set_hires(gpx2_hires_mode_converter(input));
+                break;
+            case '2':
+                printf("Enter REFCLK frequency (Hz): ");
+                scanf("%d", &input);
+                gpx2_set_refclk_divisions(gpx2_compute_divisions_from_freq(input));
+                break;
+            case '3':
+                for (int i=0; i<17;i++)
+                    printf("config[%d]=0x%02X\n", i, gpx2_config[i]);
+                break;
+            case '4':
+                gpx2_validate_config();
+                break;
+            case '5':
+                if (gpx2_validate_config()){
+                    gpx2_write_and_verify_config(gpx2_config);
+                    gpx2_start_measurement();
+                    return;
+                }
+                break;
+            case 'q':
+            case 'Q':
+                return;
+            default:
+                printf("Invalid option\n");
+        }
+    }
+}
 // main
 int main()
 {
@@ -383,13 +513,16 @@ int main()
     gpx2_cs_high();
     busy_wait_us(100);
 
+    //cli
+    gpx2_cli_menu();
+
     // // set frequency
     // uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
     // gpx2_set_refclk_divisions(divisions);
 
-    // // modify config
+    // // modify config (input-config)
     // gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
-    gpx2_input_config();
+    //gpx2_input_config();
 
     // write config to GPX2
     gpx2_write_and_verify_config(gpx2_config);
