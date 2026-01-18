@@ -444,8 +444,6 @@ void gpx2_cli_menu()
         printf("3. Show config bytes\n");
         printf("4. Validate config\n");
         printf("5. Apply config and start measurement\n");
-        printf("6. Set CHANNEL COMBINE (N/D/W)\n");
-        printf("7. Set XOSC (0/1)\n");
         printf("Q. Quit\n");
 
         char choice=getchar();
@@ -477,22 +475,6 @@ void gpx2_cli_menu()
                     gpx2_start_measurement();
                     return;
                 }
-                break;
-            case '6': {
-                char ch;
-                printf("Channel combine mode: \n");
-                printf("N=Normal\n");
-                printf("D=Pulse Distance\n");
-                printf("W=Pulse Width\n");
-                printf("Select: \n");
-                scanf("%c", &ch);
-                gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
-                break;
-            }
-            case '7':
-                printf("Enable XOSC? (0/1): ");
-                scanf("%d", &input);
-                gpx2_set_refclk_by_xosc(input);
                 break;
             case 'q':
             case 'Q':
