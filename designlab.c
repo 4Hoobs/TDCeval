@@ -107,11 +107,11 @@ typedef enum
 } gpx2_hires_mode_t;
 static gpx2_hires_mode_t gpx2_hires_mode_converter(uint8_t mode)
 {
-    if (mode == 2)
+    if (mode == 1)
     {
         return GPX2_HIRES_2X;
     }
-    else if (mode == 4)
+    else if (mode == 2)
     {
         return GPX2_HIRES_4X;
     }
@@ -584,6 +584,7 @@ void gpx2_cli_menu()
         }
     }
 }
+
 // main
 int main()
 {
@@ -615,14 +616,6 @@ int main()
 
     //cli
     gpx2_cli_menu();
-
-    // // set frequency
-    // uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
-    // gpx2_set_refclk_divisions(divisions);
-
-    // // modify config (input-config)
-    // gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
-    //gpx2_input_config();
 
     // write config to GPX2
     gpx2_write_and_verify_config(gpx2_config);
@@ -679,11 +672,11 @@ int main()
             {
                 if (pins[ch] != 0)
                 {
-                    // printf("CH%d: REF=%lu   STOP=%lu\n",
-                    //        ch + 1,
-                    //        (unsigned long)reference_index[ch],
-                    //        (unsigned long)stop_results[ch]);
-                    printf("%d\n",stop_results[ch]);
+                    printf("CH%d: REF=%lu   STOP=%lu\n",
+                           ch + 1,
+                           (unsigned long)reference_index[ch],
+                           (unsigned long)stop_results[ch]);
+                    // printf("%d\n",stop_results[ch]); //debug
                 }
             }
         }

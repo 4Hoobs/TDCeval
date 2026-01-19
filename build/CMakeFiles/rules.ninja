@@ -17,7 +17,7 @@
 rule ASM_COMPILER__designlab_unscanned_Release
   depfile = $DEP_FILE
   deps = gcc
-  command = ${LAUNCHER}${CODE_CHECK}C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
   description = Building ASM object $out
 
 
@@ -27,7 +27,7 @@ rule ASM_COMPILER__designlab_unscanned_Release
 rule C_COMPILER__designlab_unscanned_Release
   depfile = $DEP_FILE
   deps = gcc
-  command = ${LAUNCHER}${CODE_CHECK}C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
   description = Building C object $out
 
 
@@ -37,7 +37,7 @@ rule C_COMPILER__designlab_unscanned_Release
 rule CXX_COMPILER__designlab_unscanned_Release
   depfile = $DEP_FILE
   deps = gcc
-  command = ${LAUNCHER}${CODE_CHECK}C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-g++.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-g++.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
   description = Building CXX object $out
 
 
@@ -45,10 +45,29 @@ rule CXX_COMPILER__designlab_unscanned_Release
 # Rule for linking CXX executable.
 
 rule CXX_EXECUTABLE_LINKER__designlab_Release
-  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-g++.exe $FLAGS -Wl,--build-id=none $LINK_FLAGS @$RSP_FILE -o $TARGET_FILE && $POST_BUILD"
+  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-g++.exe $FLAGS -Wl,--build-id=none $LINK_FLAGS @$RSP_FILE -o $TARGET_FILE && $POST_BUILD"
   description = Linking CXX executable $TARGET_FILE
   rspfile = $RSP_FILE
   rspfile_content = $in $LINK_PATH $LINK_LIBRARIES
+  restat = $RESTAT
+
+
+#############################################
+# Rule for compiling C files.
+
+rule C_COMPILER__CLI_unscanned_Release
+  depfile = $DEP_FILE
+  deps = gcc
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
+  description = Building C object $out
+
+
+#############################################
+# Rule for linking C static library.
+
+rule C_STATIC_LIBRARY_LINKER__CLI_Release
+  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\hoobs\.pico-sdk\cmake\v3.31.5\bin\cmake.exe -E rm -f $TARGET_FILE && C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-ar.exe qc $TARGET_FILE $LINK_FLAGS $in && C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-ranlib.exe $TARGET_FILE && $POST_BUILD"
+  description = Linking C static library $TARGET_FILE
   restat = $RESTAT
 
 
@@ -66,7 +85,7 @@ rule CUSTOM_COMMAND
 rule ASM_COMPILER__bs2_default_unscanned_Release
   depfile = $DEP_FILE
   deps = gcc
-  command = ${LAUNCHER}${CODE_CHECK}C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
   description = Building ASM object $out
 
 
@@ -74,7 +93,7 @@ rule ASM_COMPILER__bs2_default_unscanned_Release
 # Rule for linking ASM executable.
 
 rule ASM_EXECUTABLE_LINKER__bs2_default_Release
-  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $FLAGS -Wl,--build-id=none $LINK_FLAGS $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES && $POST_BUILD"
+  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $FLAGS -Wl,--build-id=none $LINK_FLAGS $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES && $POST_BUILD"
   description = Linking ASM executable $TARGET_FILE
   restat = $RESTAT
 
@@ -85,7 +104,7 @@ rule ASM_EXECUTABLE_LINKER__bs2_default_Release
 rule ASM_COMPILER__bs2_default_library_unscanned_Release
   depfile = $DEP_FILE
   deps = gcc
-  command = ${LAUNCHER}${CODE_CHECK}C:\Users\narfi\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
+  command = ${LAUNCHER}${CODE_CHECK}C:\Users\hoobs\.pico-sdk\toolchain\14_2_Rel1\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out   -c $in
   description = Building ASM object $out
 
 
@@ -93,7 +112,7 @@ rule ASM_COMPILER__bs2_default_library_unscanned_Release
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\narfi\.pico-sdk\cmake\v3.31.5\bin\cmake.exe --regenerate-during-build -SC:\Users\narfi\OneDrive\Desktop\agh\designlab\gpx2_pico -BC:\Users\narfi\OneDrive\Desktop\agh\designlab\gpx2_pico\build
+  command = C:\Users\hoobs\.pico-sdk\cmake\v3.31.5\bin\cmake.exe --regenerate-during-build -SC:\Users\hoobs\OneDrive\raspberry\tdc\TDCeval -BC:\Users\hoobs\OneDrive\raspberry\tdc\TDCeval\build
   description = Re-running CMake...
   generator = 1
 
@@ -102,7 +121,7 @@ rule RERUN_CMAKE
 # Rule for cleaning all built files.
 
 rule CLEAN
-  command = C:\Users\narfi\.pico-sdk\ninja\v1.12.1\ninja.exe $FILE_ARG -t clean $TARGETS
+  command = C:\Users\hoobs\.pico-sdk\ninja\v1.12.1\ninja.exe $FILE_ARG -t clean $TARGETS
   description = Cleaning all built files...
 
 
@@ -110,6 +129,6 @@ rule CLEAN
 # Rule for printing all primary targets available.
 
 rule HELP
-  command = C:\Users\narfi\.pico-sdk\ninja\v1.12.1\ninja.exe -t targets
+  command = C:\Users\hoobs\.pico-sdk\ninja\v1.12.1\ninja.exe -t targets
   description = All primary targets available:
 
