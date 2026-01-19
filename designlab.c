@@ -174,46 +174,77 @@ static void gpx2_input_config()
 {
     int input = 0;
     uint32_t bigInput = 0;
+    char ch;
 
-    for (size_t i = 0; i < 4; i++)
-    {
-        printf("pin%d\n", i + 1);
+    printf("\n---INPUT CONFIGURATION---\n");
+
+    //stop pins
+    printf("\nConfigure STOP pins(0=disable, 1=enable)\n");
+    for(size_t i=0; i<4; i++){
+        printf("Enable STOP%d? (0/1): ", i+1);
         scanf("%d", &input);
-        pins[i] = (uint8_t)input;
+        pins[i]=(uint8_t)input;
     }
     gpx2_set_input_pins(pins);
-    printf("refclk set\n");
+
+    //REFCLK pin enable
+    printf("\nEnable REFCLK pin? (0=off, 1=on): ");
     scanf("%d", &input);
     gpx2_set_refclk(input);
-    for (size_t i = 0; i < 4; i++)
-    {
-        printf("hit%d\n", i + 1);
+
+    //HIT_ENA pins
+    printf("\nConfigure HIT_ENA pins (0=disable, 1=enable)\n");
+    for (size_t i=0; i<4; i++){
+        printf("Enable HIT_ENA%d? (0/1): ", i+1);
         scanf("%d", &input);
-        pins[i] = (uint8_t)input;
+        pins[i]=(uint8_t)input;
     }
     gpx2_set_input_processing(pins);
-    printf("channel combine\n");
-    char ch;
+
+    //channel combine 
+    printf("\nChannel combine mode: \n");
+    printf("N=normal\n");
+    printf("D=Pulse distance\n");
+    printf("W=pulse width\n");
+    printf("Select mode: ");
     scanf(" %c", &ch);
     gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
-    printf("hires\n");
+
+    //HIRES
+    printf("\nHIRES mode: \n");
+    printf("0=OFF\n");
+    printf("2=2x\n");
+    printf("4=4x\n");
+    printf("Select HIRES: ");
     scanf("%d", &input);
     gpx2_set_hires(gpx2_hires_mode_converter(input));
-    printf("common fifo\n");
+
+    //FIFO modes
+    printf("\nEnable COMMON FIFO? (0/1): ");
     scanf("%d", &input);
     gpx2_set_common_fifo(input);
-    printf("blockwise fifo\n");
+
+    printf("Enable BLOCKWISE FIFO? (0/1): ");
     scanf("%d", &input);
     gpx2_set_blockwise_fifo(input);
-    printf("freq\n");
+
+    //REFCLK frequency
+    printf("\nEnter REFCLK frequency in Hz (e.g., 5000000 for 5MHz): ");
     scanf("%d", &bigInput);
     gpx2_set_refclk_divisions(gpx2_compute_divisions_from_freq(bigInput));
-    printf("xosc\n");
+
+    //XOSC
+    printf("\nUse internal XOSC? (0=extrenal REFCLK, 1=internal crystal): ");
     scanf("%d", &input);
     gpx2_set_refclk_by_xosc(input);
-    printf("cmos\n");
+
+    //CMOS input
+    printf("\nEnable CMOS input mode? (0/1): ");
     scanf("%d", &input);
     gpx2_set_cmos_input(input);
+
+    printf("\nInput configuration updated.\n");
+    
 }
 
 /**
@@ -449,7 +480,7 @@ bool gpx2_validate_config(void)
     }
     //9. missing PIN_ENA_STOP master bit
     uint8_t stop_master_enable=(gpx2_config[0]>>6)&0x01;
-    if (!stop_master_enable && pin_ena !=0){
+    if (stop_master_enable==1 && pin_ena !=0){
         printf("ERROR: STOP pins enabled but master STOP_ENA bit is off\n");
         ok=false;
     }
