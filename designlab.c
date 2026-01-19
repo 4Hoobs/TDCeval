@@ -437,6 +437,16 @@ bool gpx2_validate_config(void)
     if(refclk_freq<20000000){
         printf("WARNING: REFCLK frequency (%u Hz) is low, may reduce resolution\n", refclk_freq);  
     }
+    //XOSC vs REFCLK pin consistency
+    uint8_t xosc=(gpx2_config[7]>>7)&0x01;
+    if (xosc && refclk_ena){
+        printf("ERROR: XOSC enabled but REFCLK pin also enabled-disable REFCLK when using XOSC.\n");
+        ok=false;
+    }
+    if (!xosc && !refclk_ena){
+        printf("ERROR: External REFCLK selected but REFCLK pin disabled.\n");
+        ok=false;
+    }
     //9. missing PIN_ENA_STOP master bit
     uint8_t stop_master_enable=(gpx2_config[0]>>6)&0x01;
     if (!stop_master_enable && pin_ena !=0){
@@ -588,6 +598,7 @@ void gpx2_cli_menu()
         }
     }
 }
+
 // main
 int main()
 {
