@@ -429,6 +429,31 @@ bool gpx2_validate_config(void)
             ok=false;
         }
     }
+    //8. REFCLK_DIVISIONS vs actual REFCLK freq
+    uint32_t refclk_freq=1000000000000ULL/refclk_div;
+    if(refclk_div<20000000){
+        printf("WARNING: REFCLK frequency (%u Hz) is low, may reduce resolution\n", refclk_freq);  
+    }
+    //9. missing PIN_ENA_STOP master bit
+    uint8_t stop_master_enable=(gpx2_config[0]>>6)&0x01;
+    if (!stop_master_enable && pin_ena !=0){
+        printf("ERROR: STOP pins enabled but master STOP_ENA bit is off\n");
+        ok=false;
+    }
+    //10. CHANNEL_COMBINE mode requires specifiC STOP/HIT config.
+    if (channel_combine==1||channel_combine==2){
+        if ((pin_ena&0x03)!=0x03||(hit_ena&0x03)!=0x03){
+            printf("ERROR: Pulse distance/width mode requires STOP1 and STOP2 enabled HIT_ENA1/2\n");
+            ok=false;
+        }
+    }
+    //11. HIT_EN channels
+    if ((hit_ena & 0xF0)!=0){
+        printf("ERROR: HIT_ENA has bits set beyond STOP4\n");
+        ok=false;
+    }
+    //12. LVDS redout frequency warning
+    
     if (ok)
         printf("CONFIG VALID\n");
     else
