@@ -339,7 +339,7 @@ static void gpx2_write_and_verify_config(const uint8_t *cfg)
     gpx2_write_config(cfg);
     if (!gpx2_verify_config(cfg))
     {
-        printf("Config change error, press Q to reset pico\n");
+        printf("Config write error, press Q to reset pico\n");
         while (1)
         {
             input = getchar();
@@ -393,7 +393,7 @@ static void gpx2_read_results(uint32_t reference_index[4],
     }
     gpx2_cs_high();
 }
-bool gpx2_validate_config(void)
+bool gpx2_validate_input(void)
 {
     bool ok=true;
     
@@ -432,7 +432,7 @@ bool gpx2_validate_config(void)
         ok=false;
     }
     //4. HIRES valid?
-    if (hires>2){
+    if (hires != 4 || hires != 2 || hires != 0){
         printf("ERROR: Invalid HIRES value (%u)\n", hires);
         ok=false;
     }
@@ -558,77 +558,6 @@ bool gpx2_validate_config(void)
         printf("CONFIG INVALID-fix error before applying\n");
     return ok;
 }
-void gpx2_cli_menu()
-{
-    while(true){
-        printf("\n---GPX2 CLI MENU---\n");
-        printf("1. Set HIRES (0, 2, 4)\n");
-        printf("2. SET REFCLK frequency (Hz)\n");
-        printf("3. Show config bytes\n");
-        printf("4. Validate config\n");
-        printf("5. Apply config and start measurement\n");
-        printf("6. Set CHANNEL COMBINE (N/D/W)\n");
-        printf("7. Set XOSC (0/1)\n");
-        printf("8. Configure input channels (STOP/HIT/FIFO/CMOS)\n");
-        printf("Q. Quit\n");
-
-        char choice=getchar();
-        while (choice == '\n'|| choice =='r')
-            choice=getchar();
-        int input=0;
-
-        switch(choice){
-            case '1':
-                printf("Enter HIRES mode: ");
-                scanf("%d", &input);
-                gpx2_set_hires(gpx2_hires_mode_converter(input));
-                break;
-            case '2':
-                printf("Enter REFCLK frequency (Hz): ");
-                scanf("%d", &input);
-                gpx2_set_refclk_divisions(gpx2_compute_divisions_from_freq(input));
-                break;
-            case '3':
-                for (int i=0; i<17;i++)
-                    printf("config[%d]=0x%02X\n", i, gpx2_config[i]);
-                break;
-            case '4':
-                gpx2_validate_config();
-                break;
-            case '5':
-                if (gpx2_validate_config()){
-                    gpx2_write_and_verify_config(gpx2_config);
-                    gpx2_start_measurement();
-                    return;
-                }
-                break;
-            case '6': {
-                char ch;
-                printf("Channel combine mode: \n");
-                printf("N=Normal\n");
-                printf("D=Pulse Distance\n");
-                printf("W=Pulse Width\n");
-                printf("Select: \n");
-                scanf(" %c", &ch);
-                gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
-                break;
-            }
-            case '7':
-                printf("Enable XOSC? (0/1): ");
-                scanf("%d", &input);
-                gpx2_set_refclk_by_xosc(input);
-                break;
-            case '8':
-                gpx2_input_config();
-                break;
-            case 'q':
-            case 'Q':
-                return;
-            default:
-                printf("Invalid option\n");
-        }
-    }
-}
 
 // main
 int main()
@@ -660,20 +589,19 @@ int main()
     busy_wait_us(100);
 
     //cli
-    gpx2_cli_menu();
+    do
+    {
+        gpx2_input_config();
+    } while (!gpx2_validate_input());
+    
+    
 
-    // // set frequency
-    // uint32_t divisions = gpx2_compute_divisions_from_freq(5000000); // 5 MHz
-    // gpx2_set_refclk_divisions(divisions);
 
-    // // modify config (input-config)
-    // gpx2_set_hires(GPX2_HIRES_OFF); //_2X or _4X
-    //gpx2_input_config();
 
     // write config to GPX2
     gpx2_write_and_verify_config(gpx2_config);
 
-    printf("Config OK, starting measurement...\n");
+    printf("Config written, starting measurement...\n");
 
     // start measurement
     gpx2_start_measurement();
@@ -725,11 +653,11 @@ int main()
             {
                 if (pins[ch] != 0)
                 {
-                    // printf("CH%d: REF=%lu   STOP=%lu\n",
-                    //        ch + 1,
-                    //        (unsigned long)reference_index[ch],
-                    //        (unsigned long)stop_results[ch]);
-                    printf("%d\n",stop_results[ch]);
+                    printf("CH%d: REF=%lu   STOP=%lu\n",
+                           ch + 1,
+                           (unsigned long)reference_index[ch],
+                           (unsigned long)stop_results[ch]);
+                    // printf("%d\n",stop_results[ch]); //debug
                 }
             }
         }
