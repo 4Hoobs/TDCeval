@@ -528,6 +528,7 @@ void gpx2_cli_menu()
         printf("5. Apply config and start measurement\n");
         printf("6. Set CHANNEL COMBINE (N/D/W)\n");
         printf("7. Set XOSC (0/1)\n");
+        printf("8. Configure input channels (STOP/HIT/FIFO/CMOS)\n");
         printf("Q. Quit\n");
 
         char choice=getchar();
@@ -575,6 +576,9 @@ void gpx2_cli_menu()
                 printf("Enable XOSC? (0/1): ");
                 scanf("%d", &input);
                 gpx2_set_refclk_by_xosc(input);
+                break;
+            case '8':
+                gpx2_input_config();
                 break;
             case 'q':
             case 'Q':
