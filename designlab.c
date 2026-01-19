@@ -19,6 +19,9 @@
 #define OPC_READ_CONFIG 0x40  // read configuration
 #define OPC_READ_RESULTS 0x60 // read measurement results
 
+//spi speed in Hz
+#define GPX2_SPI_SPEED_HZ (4*1000*1000)
+
 // configuration registers, 17 bytes, from datasheet
 static uint8_t gpx2_config[17] = {
     0x31, 0x01, 0x1F, 0x40,
@@ -431,7 +434,7 @@ bool gpx2_validate_config(void)
     }
     //8. REFCLK_DIVISIONS vs actual REFCLK freq
     uint32_t refclk_freq=1000000000000ULL/refclk_div;
-    if(refclk_div<20000000){
+    if(refclk_freq<20000000){
         printf("WARNING: REFCLK frequency (%u Hz) is low, may reduce resolution\n", refclk_freq);  
     }
     //9. missing PIN_ENA_STOP master bit
@@ -454,6 +457,60 @@ bool gpx2_validate_config(void)
     }
     //12. LVDS redout frequency warning
     
+    //13. HIRES+CHANNEL_COMBINE conflict
+    if (channel_combine==GPX2_COMBINE_PULSE_DISTANCE&&hires>0){
+        if (hires==GPX2_HIRES_4X){
+            printf("WARNING: Pulse Width + HIRES 4x may exceed internal timing limits at high event rates\n");
+        } else {
+            printf("WARNING: Pulse Width + HIRES may reduce accuracy at high event rates\n");
+        }
+    }
+    //14. HIRES 4x  with coarse REFCLK_DIVISIONS may reduce accuracy
+    if (hires==2 && refclk_div>50000){
+        printf("WARNING: HIRES 4x with REFCLK_DIVISIONS reduces accuracy\n");
+    }
+    //15. STOP pins enabled but HIT_ENA disabled for all
+    if (pin_ena !=0 && hit_ena==0){
+        printf("ERROR: STOP pins enabled but all HIT_ENA bits are zero\n");
+        ok=false;
+    }
+    //16. REFCLK enabled but REFCLK_DIV not updated
+    
+    //17. CMOS input mode+high frequency STOP signals
+    if (cmos_input && (hires>0||channel_combine>0)){
+        printf("WARNING: CMOS input with HIRES or COMBINE modes may distort timing\n");
+    }
+    //18. FIFO modes+SPI readout speed mismatch
+    if (blockwise_fifo && common_fifo && GPX2_SPI_SPEED_HZ<8000000){
+        printf("WARNING: FIFO modes enabled but SPI speed (%u Hz) may be too slow\n",
+        GPX2_SPI_SPEED_HZ);
+    }
+    //19. REFCLK disabled but HIRES enabled
+    if (!refclk_ena && hires>0){
+        printf("ERROR: HIRES requires REFCLK enabled\n");
+        ok=false;
+    }
+    //20. CHANNEL_COMBINE=pulse distance but STOP3/4 enabled
+    if (channel_combine==1 && (pin_ena & 0b1100)){
+        printf("WARNING: Pulse distance mode ignores STOP3/4; disable them for clarity\n");
+    }
+    //21. CHANNEL_COMBINE=pulse width but HIRES enabled
+    //if (channel_combine==2 && hires>0){
+      //  printf("WARNING: Pulse Width + HIRES may exceed internal timing limits\n");
+    //} -> merged with 13th
+    //22. REFCLK_DIVISION too small for pulse width mode
+    if (channel_combine==2 && refclk_div>60000){
+        printf("WARNING: Pulse width mode with coarse REFCLK_DIVISIONS reduces base time resolution\n");
+    }
+    //23. STOP pins enabled but REFCLK disabled
+    if (pin_ena !=0 && !refclk_ena){
+        printf("ERROR: STOP pins active but REFCLK disabled\n");
+        ok=false;
+    }
+    //24. REFCLK_DIVISIONS too large(low resolution)
+    if (refclk_div>100000){
+        printf("WARNING: REFCLK_DIVISIONS>100000 ps reduces timing resolution\n");
+    }
     if (ok)
         printf("CONFIG VALID\n");
     else
@@ -510,7 +567,7 @@ void gpx2_cli_menu()
                 printf("D=Pulse Distance\n");
                 printf("W=Pulse Width\n");
                 printf("Select: \n");
-                scanf("%c", &ch);
+                scanf(" %c", &ch);
                 gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
                 break;
             }
@@ -533,7 +590,7 @@ int main()
     stdio_init_all(); // enable usb serial output
     char userinput = getchar();
     // initialize SPI hardware
-    spi_init(SPI_PORT, 4 * 1000 * 1000); // SPI_PORT at 4MHz
+    spi_init(SPI_PORT, GPX2_SPI_SPEED_HZ); // SPI_PORT at 4MHz
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_SPI_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SPI_MOSI, GPIO_FUNC_SPI);
