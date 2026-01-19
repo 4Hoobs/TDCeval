@@ -175,75 +175,105 @@ static void gpx2_input_config()
     int input = 0;
     uint32_t bigInput = 0;
     char ch;
+    
+    while(true){
+        printf("\n---INPUT CONFIGURATION---\n");
+        printf("1. COnfigure STOP pins (0/1)\n");
+        printf("2. Configure HIT_ENA pins (0/1)\n");
+        printf("3. Enable/disable REFCLK pin\n");
+        printf("4. Set channel combine(N/D/W)\n");
+        printf("5. Set HIRES (0/2/4)\n"); 
+        printf("6. Set COMMON FIFO (0/1)\n");
+        printf("7. Set BLOCKWISE FIFO (0/1)\n");
+        printf("8. Set REFCLK frequency (Hz)\n");
+        printf("9. Set XOSC (0==extrenal REFCLK, 1=internal crystal)\n");
+        printf("A. Set CMOS input mode (0/1)\n");
+        printf("B. Show current config bytes\n");
+        printf("Q. Apply & Exit\n");
+        printf("Select option: ");
 
-    printf("\n---INPUT CONFIGURATION---\n");
+        char choice;
+        scanf(" %c", &choice);
+        switch(choice)
+        {
+            case '1':
+                printf("\nSTOP pins(0=disable, 1=enable)\n");
+                 for(size_t i=0; i<4; i++){
+                    printf("Enable STOP%d? (0/1): ", i+1);
+                    scanf("%d", &input);
+                    pins[i]=(uint8_t)input;
+                }
+                gpx2_set_input_pins(pins);
+                break;
+            case '2':
+                printf("\nHIT_ENA pins(0=disable, 1=enable)\n");
+                for (size_t i=0; i<4; i++){
+                    printf("Enable HIT_ENA%d? (0/1): ", i+1);
+                    scanf("%d", &input);
+                    pins[i]=(uint8_t)input;
+            }
+                gpx2_set_input_processing(pins);
+                break;
+            case '3':
+                printf("\nEnable REFCLK pin? (0=off, 1=on): ");
+                scanf("%d", &input);
+                gpx2_set_refclk(input);
+                break;
+            case '4':
+                 printf("\nChannel combine mode: \n");
+                printf("N=normal\n");
+                printf("D=Pulse distance\n");
+                printf("W=pulse width\n");
+                printf("Select mode: ");
+                scanf(" %c", &ch);
+                gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
+                break;
+            case '5':
+                printf("\nHIRES mode (0/2/4): ");
+                scanf("%d", &input);
+                gpx2_set_hires(gpx2_hires_mode_converter(input));
+                break;
+            case '6':
+                printf("\nEnable COMMON FIFO? (0/1): ");
+                scanf("%d", &input);
+                gpx2_set_common_fifo(input);
+                break;
+            case '7':
+                printf("\nEnable BLOCKWISE FIFO? (0/1): ");
+                scanf("%d", &input);
+                gpx2_set_blockwise_fifo(input);
+                break;
+            case '8':
+                printf("\nEnter REFCLK frequency in Hz (e.g., 5000000 for 5MHz): ");
+                scanf("%d", &bigInput);
+                gpx2_set_refclk_divisions(gpx2_compute_divisions_from_freq(bigInput));
+                break;
+            case '9':
+                printf("\nUse internal XOSC? (0=extrenal REFCLK, 1=internal crystal): ");
+                scanf("%d", &input);
+                gpx2_set_refclk_by_xosc(input);
+                break;
+            case 'A':
+            case 'a':
+                printf("\nEnable CMOS input mode? (0/1): ");
+                scanf("%d", &input);
+                gpx2_set_cmos_input(input);
+                break;
+            case 'B':
+            case 'b':
+                printf("\nCurrent config bytes:\n");
+                for (int i=0; i<17; i++)
+                    printf("config[%d]=0x%02X\n", i, gpx2_config[i]);
+                break;
+            case 'Q':
+            case 'q':
+                printf("\nExiting input config menu.\n");
+                return;
+            default:
+                printf("Invalid option.\n");
 
-    //stop pins
-    printf("\nConfigure STOP pins(0=disable, 1=enable)\n");
-    for(size_t i=0; i<4; i++){
-        printf("Enable STOP%d? (0/1): ", i+1);
-        scanf("%d", &input);
-        pins[i]=(uint8_t)input;
+        }
     }
-    gpx2_set_input_pins(pins);
-
-    //REFCLK pin enable
-    printf("\nEnable REFCLK pin? (0=off, 1=on): ");
-    scanf("%d", &input);
-    gpx2_set_refclk(input);
-
-    //HIT_ENA pins
-    printf("\nConfigure HIT_ENA pins (0=disable, 1=enable)\n");
-    for (size_t i=0; i<4; i++){
-        printf("Enable HIT_ENA%d? (0/1): ", i+1);
-        scanf("%d", &input);
-        pins[i]=(uint8_t)input;
-    }
-    gpx2_set_input_processing(pins);
-
-    //channel combine 
-    printf("\nChannel combine mode: \n");
-    printf("N=normal\n");
-    printf("D=Pulse distance\n");
-    printf("W=pulse width\n");
-    printf("Select mode: ");
-    scanf(" %c", &ch);
-    gpx2_set_channel_combine(gpx2_channel_combine_mode_converter(ch));
-
-    //HIRES
-    printf("\nHIRES mode: \n");
-    printf("0=OFF\n");
-    printf("2=2x\n");
-    printf("4=4x\n");
-    printf("Select HIRES: ");
-    scanf("%d", &input);
-    gpx2_set_hires(gpx2_hires_mode_converter(input));
-
-    //FIFO modes
-    printf("\nEnable COMMON FIFO? (0/1): ");
-    scanf("%d", &input);
-    gpx2_set_common_fifo(input);
-
-    printf("Enable BLOCKWISE FIFO? (0/1): ");
-    scanf("%d", &input);
-    gpx2_set_blockwise_fifo(input);
-
-    //REFCLK frequency
-    printf("\nEnter REFCLK frequency in Hz (e.g., 5000000 for 5MHz): ");
-    scanf("%d", &bigInput);
-    gpx2_set_refclk_divisions(gpx2_compute_divisions_from_freq(bigInput));
-
-    //XOSC
-    printf("\nUse internal XOSC? (0=extrenal REFCLK, 1=internal crystal): ");
-    scanf("%d", &input);
-    gpx2_set_refclk_by_xosc(input);
-
-    //CMOS input
-    printf("\nEnable CMOS input mode? (0/1): ");
-    scanf("%d", &input);
-    gpx2_set_cmos_input(input);
-
-    printf("\nInput configuration updated.\n");
     
 }
 
@@ -432,7 +462,7 @@ bool gpx2_validate_input(void)
         ok=false;
     }
     //4. HIRES valid?
-    if (hires != 4 || hires != 2 || hires != 0){
+    if (hires != 0 && hires != 1 && hires != 2){
         printf("ERROR: Invalid HIRES value (%u)\n", hires);
         ok=false;
     }
