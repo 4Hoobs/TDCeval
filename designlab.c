@@ -339,7 +339,7 @@ static bool gpx2_write_config(const uint8_t *cfg)
     gpx2_cs_low();
 
     // opcode for write config+start address
-    gpx2_spi_send_byte(OPC_WRITE_CONFIG + 0x00);
+    gpx2_spi_send_byte(OPC_WRITE_CONFIG | 0x00);
 
     // send all 17 config bytes
     for (int i = 0; i < 17; i++)
@@ -641,7 +641,7 @@ int main()
     gpx2_write_and_verify_config(gpx2_config);
 
     printf("Config written, starting measurement...\n");
-    printf("Press P to pause mearurements, P to resume, C to reset REFNUM, Q to restart the pico\n");
+    printf("Press P to pause mearurements, R to resume, C to reset REFNUM, Q to restart the pico\n");
 
     // start measurement
     gpx2_start_measurement();
@@ -651,6 +651,7 @@ int main()
 
     while (true)
     {
+        // printf("withing measure loop\n");
         if (clk_reset)
         {
             gpx2_refclk_reset_unpulse();
