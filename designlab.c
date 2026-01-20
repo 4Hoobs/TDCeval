@@ -20,7 +20,7 @@
 #define OPC_READ_RESULTS 0x60 // read measurement results
 
 //spi speed in Hz
-#define GPX2_SPI_SPEED_HZ (4*1000*1000)
+// #define GPX2_SPI_SPEED_HZ (4*1000*1000)
 
 // configuration registers, 17 bytes, from datasheet
 static uint8_t gpx2_config[17] = {
@@ -33,6 +33,7 @@ static uint8_t gpx2_config[17] = {
 static uint8_t pins[4] = {0};
 bool measure = true;
 bool clk_reset = false;
+int gpx2_spi_speed_hz = (4*1000*1000);
 
 static void restart()
 {
@@ -175,10 +176,11 @@ static void gpx2_input_config()
     int input = 0;
     uint32_t bigInput = 0;
     char ch;
+    char choice;
     
     while(true){
         printf("\n---INPUT CONFIGURATION---\n");
-        printf("1. COnfigure STOP pins (0/1)\n");
+        printf("1. Configure STOP pins (0/1)\n");
         printf("2. Configure HIT_ENA pins (0/1)\n");
         printf("3. Enable/disable REFCLK pin\n");
         printf("4. Set channel combine(N/D/W)\n");
@@ -189,6 +191,7 @@ static void gpx2_input_config()
         printf("9. Set XOSC (0==extrenal REFCLK, 1=internal crystal)\n");
         printf("A. Set CMOS input mode (0/1)\n");
         printf("B. Show current config bytes\n");
+        printf("C. Set SPI speed\n");
         printf("Q. Apply & Exit\n");
         printf("Select option: ");
 
@@ -264,6 +267,12 @@ static void gpx2_input_config()
                 printf("\nCurrent config bytes:\n");
                 for (int i=0; i<17; i++)
                     printf("config[%d]=0x%02X\n", i, gpx2_config[i]);
+                break;
+            case 'C':
+            case 'c':
+                printf("\nInput SPI frequency in Hz (e.g., 5000000 for 5MHz): ");
+                scanf("%d", &bigInput);
+                gpx2_spi_speed_hz = bigInput;
                 break;
             case 'Q':
             case 'q':
@@ -538,7 +547,7 @@ bool gpx2_validate_input(void)
     }
     //14. HIRES 4x  with coarse REFCLK_DIVISIONS may reduce accuracy
     if (hires==2 && refclk_div>50000){
-        printf("WARNING: HIRES 4x with REFCLK_DIVISIONS reduces accuracy\n");
+        printf("WARNING: HIRES 4x with coarse REFCLK_DIVISIONS reduces accuracy\n");
     }
     //15. STOP pins enabled but HIT_ENA disabled for all
     if (pin_ena !=0 && hit_ena==0){
@@ -552,9 +561,9 @@ bool gpx2_validate_input(void)
         printf("WARNING: CMOS input with HIRES or COMBINE modes may distort timing\n");
     }
     //18. FIFO modes+SPI readout speed mismatch
-    if (blockwise_fifo && common_fifo && GPX2_SPI_SPEED_HZ<8000000){
+    if (blockwise_fifo && common_fifo && gpx2_spi_speed_hz<8000000){
         printf("WARNING: FIFO modes enabled but SPI speed (%u Hz) may be too slow\n",
-        GPX2_SPI_SPEED_HZ);
+        gpx2_spi_speed_hz);
     }
     //19. REFCLK disabled but HIRES enabled
     if (!refclk_ena && hires>0){
@@ -580,12 +589,12 @@ bool gpx2_validate_input(void)
     }
     //24. REFCLK_DIVISIONS too large(low resolution)
     if (refclk_div>100000){
-        printf("WARNING: REFCLK_DIVISIONS>100000 ps reduces timing resolution\n");
+        printf("WARNING: REFCLK_DIVISIONS>100000 reduces timing resolution\n");
     }
     if (ok)
         printf("CONFIG VALID\n");
     else
-        printf("CONFIG INVALID-fix error before applying\n");
+        printf("CONFIG INVALID -- fix errors before applying\n");
     return ok;
 }
 
@@ -594,8 +603,15 @@ int main()
 {
     stdio_init_all(); // enable usb serial output
     char userinput = getchar();
+
+    //cli
+    do
+    {
+        gpx2_input_config();
+    } while (!gpx2_validate_input());
+
     // initialize SPI hardware
-    spi_init(SPI_PORT, GPX2_SPI_SPEED_HZ); // SPI_PORT at 4MHz
+    spi_init(SPI_PORT, gpx2_spi_speed_hz); // SPI_PORT at 4MHz
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_SPI_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SPI_MOSI, GPIO_FUNC_SPI);
@@ -618,13 +634,6 @@ int main()
     gpx2_cs_high();
     busy_wait_us(100);
 
-    //cli
-    do
-    {
-        gpx2_input_config();
-    } while (!gpx2_validate_input());
-    
-    
 
 
 
@@ -632,6 +641,7 @@ int main()
     gpx2_write_and_verify_config(gpx2_config);
 
     printf("Config written, starting measurement...\n");
+    printf("Press P to pause mearurements, P to resume, C to reset REFNUM, Q to restart the pico\n");
 
     // start measurement
     gpx2_start_measurement();
