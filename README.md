@@ -19,6 +19,7 @@ Key Features:
 Documentation used:
 
 [DATASHEET] https://www.sciosense.com/wp-content/uploads/2023/12/TDC-GPX2-Datasheet.pdf
+
 [USER-GUIDE] https://www.sciosense.com/wp-content/uploads/2023/12/TDC-GPX2-Evaluation-Kit-User-Guide.pdf
 
 
